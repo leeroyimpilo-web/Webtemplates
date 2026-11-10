@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - sharedit-android
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,11 +23,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK tools
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android API 36
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Android API 36 using runner SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Prepare ShareDit Android source
         run: bash scripts/bootstrap.sh
