@@ -8,7 +8,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "PEND — Send any file", template: "%s · PEND" },
-  description: "Peer-to-peer file sharing with trusted contacts and pending transfers. Phase 0 preview.",
+  description: "Peer-to-peer file sharing with trusted contacts and pending transfers. P2P transfer preview.",
   applicationName: "PEND",
   appleWebApp: { capable: true, title: "PEND", statusBarStyle: "black-translucent" },
   icons: { icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/icon-192.png" },

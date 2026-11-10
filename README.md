@@ -1,6 +1,6 @@
-# PEND — Peer-to-Peer File Transfer (Phase 0)
+# PEND — Peer-to-Peer File Transfer (Phase 1 Sprint 1 work-in-progress)
 
-> **Development status:** Phase 0 scaffold. **No files transfer yet.** Phase 1 is deliberately not started. This repository is independent of the previous ShareDit Android scaffold.
+> **Development status:** Phase 1 Sprint 1 implementation in review. **Not verified by real-device transfer testing.** Pairing, pending/resume and auto-accept are not implemented. See [Sprint 1 notes](docs/PHASE1_SPRINT1.md).
 
 **Tagline:** Send any file, any size, to anyone. Pending until they're online. Paired once, auto-receive forever. (Product *vision*, not current implementation.)
 
@@ -16,12 +16,12 @@
 
 ## Not included
 
-No WebRTC, PeerJS transfer, chunking, pairing codes, presence, auto-receive or background heartbeat yet. They belong to later phases and are **not claimed as working**. The mobile web PWA cannot guarantee background operation or indefinite retention of large pending files. Later Capacitor Android native services and storage testing are required for that promise.
+PeerJS adapter, TURN, trusted pairing, presence, auto-receive, pause/resume and background heartbeat are not implemented yet. The native WebRTC send/receive path is still unverified by two-browser testing. The mobile web PWA cannot guarantee background operation or indefinite retention of large pending files. Later Capacitor Android native services and storage testing are required for that promise.
 
 ## Development
 
-1. Create a **dedicated Supabase project** (do not reuse another app’s database). Enable **Anonymous Sign-Ins** in Authentication -> Providers.
-2. Open Supabase SQL Editor and execute `supabase/schema.phase0.sql` once. The SQL creates all five tables, constraints, indexes and RLS policies. **Pairing-code tables deliberately have no browser-read policies.**
+1. Use the dedicated **PEND** Supabase project in your **Sharedit** organization. Enable **Anonymous Sign-Ins** in Authentication -> Providers.
+2. The Phase 0 schema was already applied. Apply `supabase/phase1_rooms.sql` once for transfer invitation rooms and private signaling permissions. **Pairing-code tables deliberately have no browser-read policies.**
 3. Copy `.env.example` to `.env.local` and fill:
 
    ```dotenv
