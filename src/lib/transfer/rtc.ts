@@ -11,6 +11,8 @@ export interface PeerOptions {
   role: Role;
   onState: (state: PeerState) => void;
   onChannel: (channel: RTCDataChannel) => void;
+  /** Tests can shorten the retry window; production defaults to 2 seconds. */
+  helloRetryMs?: number;
 }
 
 export class SupabaseRtcPeer {
@@ -19,6 +21,7 @@ export class SupabaseRtcPeer {
   private candidates: RTCIceCandidateInit[] = [];
   private closed = false;
   private started = false;
+  private helloTimer: ReturnType<typeof setInterval> | null = null;
   private opts: PeerOptions;
 
   constructor(opts: PeerOptions) {
@@ -40,8 +43,21 @@ export class SupabaseRtcPeer {
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") reject(new Error(`Signaling channel: ${status}`));
       });
     });
+    if (this.closed) return;
     this.opts.onState("waiting");
-    if (this.opts.role === "receiver") await this.send({ type: "hello", device: this.opts.deviceId });
+    if (this.opts.role === "receiver") {
+      // Realtime broadcasts are not persisted. If the receiver subscribes before
+      // the sender, its first hello may be lost. Retry until an offer arrives.
+      await this.send({ type: "hello", device: this.opts.deviceId });
+      if (!this.closed && !this.pc) {
+        this.helloTimer = setInterval(() => {
+          if (!this.closed && !this.pc) {
+            void this.send({ type: "hello", device: this.opts.deviceId })
+              .catch(() => this.opts.onState("disconnected"));
+          }
+        }, this.opts.helloRetryMs ?? 2000);
+      }
+    }
   }
   private async send(message: Message) {
     if (this.closed) return;
@@ -65,15 +81,22 @@ export class SupabaseRtcPeer {
     this.opts.onState("connecting");
     return pc;
   }
+  private stopHelloRetry() {
+    if (this.helloTimer !== null) clearInterval(this.helloTimer);
+    this.helloTimer = null;
+  }
   private async handle(message: Message) {
-    if (this.closed || message.device === this.opts.deviceId) return;
+    if (!message || typeof message !== "object" || typeof message.device !== "string" ||
+      !["hello", "offer", "answer", "ice"].includes(message.type) ||
+      this.closed || message.device === this.opts.deviceId) return;
     if (message.type === "hello" && this.opts.role === "sender" && !this.pc) {
       const pc = this.makeConnection();
       const dc = pc.createDataChannel("pend-files", { ordered: true });
       this.opts.onChannel(dc);
       await pc.setLocalDescription(await pc.createOffer());
       await this.send({ type: "offer", device: this.opts.deviceId, sdp: pc.localDescription?.toJSON() });
-    } else if (message.type === "offer" && this.opts.role === "receiver" && message.sdp) {
+    } else if (message.type === "offer" && this.opts.role === "receiver" && message.sdp && !this.pc) {
+      this.stopHelloRetry();
       const pc = this.makeConnection();
       await pc.setRemoteDescription(message.sdp);
       await this.flushCandidates();
@@ -93,6 +116,7 @@ export class SupabaseRtcPeer {
   }
   close() {
     this.closed = true;
+    this.stopHelloRetry();
     this.pc?.close();
     void this.opts.client.removeChannel(this.channel);
   }

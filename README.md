@@ -1,6 +1,6 @@
-# PEND — Peer-to-Peer File Transfer (Phase 1 Sprint 1 work-in-progress)
+# PEND — Peer-to-Peer File Transfer (Phase 1 Sprint 2 candidate)
 
-> **Development status:** Phase 1 Sprint 1 implementation in review. **Not verified by real-device transfer testing.** Pairing, pending/resume and auto-accept are not implemented. See [Sprint 1 notes](docs/PHASE1_SPRINT1.md).
+> **Development status:** Phase 1 Sprint 2 code prepared; awaiting end-to-end browser validation. **Not verified by real-device transfer testing.** Pairing, pending/resume and auto-accept are not implemented. See [Sprint 1 notes](docs/PHASE1_SPRINT1.md).
 
 **Tagline:** Send any file, any size, to anyone. Pending until they're online. Paired once, auto-receive forever. (Product *vision*, not current implementation.)
 
@@ -73,3 +73,15 @@ If env vars are missing, a setup panel appears rather than fake success. No Supa
 Phase 0 -> Phase 1 -> Phase 2 -> Phase 3 -> [request approval] -> Phase 4 -> Phase 5.
 
 User approval is required before starting the next phase. See `docs/PHASES.md`.
+
+## Phase 1 Sprint 2 status
+
+The direct sender / receiver prototype adds a 1 MiB disk-write ACK window, pause/resume on the active connection, download history and more robust error handling. See `docs/PHASE1_SPRINT2.md` for the acceptance checklist, limitations and the necessary security fixes. Run `npm run test:protocol` to test the transfer protocol. The separate SQL migration `supabase/phase1_sprint2_rate_limit.sql` must be applied after `phase1_rooms.sql`. The PEND Supabase project has already received this SQL migration. Do not store or route file bytes via Supabase.
+
+## Sprint 2 completion and QA handoff
+
+- Receiver now repeats initial WebRTC `hello` until the sender responds, avoiding a lost first broadcast when devices subscribe in the opposite order.
+- Automated protocol tests cover 64 KiB chunk boundaries, ACK windows, pause/resume, cancellation, forged ACK rejection, a **synthetic** 1 GiB stream, and signaling hello retries.
+- **A simulated 1 GiB test is not a real 1 GiB two-browser transfer**. Actual Chrome desktop/browser testing and TURN-based WAN acceptance are still required.
+- Realtime messages and Supabase rows are metadata only. Receiver requires manual saving for every file.
+- No Phase 2 (trusted pairing) or Phase 3 (offline queue) implementation has begun.
