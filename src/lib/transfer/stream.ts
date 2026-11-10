@@ -18,7 +18,7 @@ export interface TransferHeader {
   total_chunks: number;
   chunk_size: 65536;
 }
-export type TransferControl = TransferHeader | { type: "ready"; resume_from_byte: 0 }
+export type TransferControl = TransferHeader | { type: "ready"; resume_from_byte: number }
   | { type: "ack"; received_bytes: number }
   | { type: "pause" } | { type: "resume" }
   | { type: "end" } | { type: "cancel" } | { type: "finished" }
@@ -121,10 +121,16 @@ export class TransferSender {
   resume() { this.localPaused = false; sendControl(this.channel, { type: "resume" }); this.onPauseChanged(this.remotePaused); this.wake(); }
   remotePause(paused: boolean) { this.remotePaused = paused; this.onPauseChanged(paused || this.localPaused); this.wake(); }
 
-  async start() {
+  async start(resumeOffset = 0) {
+    if (!Number.isSafeInteger(resumeOffset) || resumeOffset < 0 || resumeOffset > this.file.size ||
+      (resumeOffset !== this.file.size && resumeOffset % CHUNK_BYTES !== 0)) {
+      throw new Error("Invalid resume offset");
+    }
+    this.sentBytes = resumeOffset; this.ackBytes = resumeOffset;
+    this.onProgress(resumeOffset);
     if (this.started) throw new Error("Transfer already started.");
     this.started = true;
-    const reader = this.file.stream().getReader();
+    const reader = (resumeOffset ? this.file.slice(resumeOffset) : this.file).stream().getReader();
     let carry = new Uint8Array(CHUNK_BYTES);
     let carryUsed = 0;
     const pushChunk = async (chunk: Uint8Array) => {

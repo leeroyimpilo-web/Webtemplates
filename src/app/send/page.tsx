@@ -11,7 +11,7 @@ import { createTransferRoom, randomTransferCode } from "@/lib/transfer/rooms";
 import { SupabaseRtcPeer, type PeerState } from "@/lib/transfer/rtc";
 import { CHUNK_BYTES, TransferSender, parseControl, sendControl, type TransferControl } from "@/lib/transfer/stream";
 import { db } from "@/lib/db";
-import { createTrustedTransfer } from "@/lib/transfer/trusted";
+import { queueTrustedFile } from "@/lib/queue";
 import { getPairingContacts, isTrustedLocally, type PairingContact } from "@/lib/pairing";
 
 const fmt = (n: number) => n < 1024 ? `${n} B` : `${(n / (1024 ** Math.floor(Math.log(n) / Math.log(1024)))).toFixed(1)} ${["B", "KiB", "MiB", "GiB", "TiB"][Math.floor(Math.log(n) / Math.log(1024))]}`;
@@ -72,9 +72,14 @@ export default function SendPage() {
       if (target && (!recipient || !await isTrustedLocally(recipient.peer))) {
         throw new Error("Recipient is not verified as a paired device. Refresh Contacts and pair again.");
       }
-      const trusted = target ? await createTrustedTransfer(client, device.id, target, file) : null;
-      const roomId = trusted ? trusted.roomId : await createTransferRoom(client, device.id, invitation);
-      transferId.current = trusted?.transferId ?? null;
+      if (target) {
+        await queueTrustedFile(client,device.id,target,file);
+        setStatus(`File queued for ${recipient?.peer.device_name}. It will retry while PEND is open when they become available.`);
+        setCode("");setBusy(false);return;
+      }
+      const trusted = null;
+      const roomId = await createTransferRoom(client, device.id, invitation);
+      transferId.current = null;
       setCode(invitation);
       setStatus(trusted ? "Trusted invitation sent. Waiting for the recipient's open PEND app." :
         "Waiting for your recipient to enter this code (valid 10 minutes).");
@@ -181,8 +186,8 @@ export default function SendPage() {
   };
 
   return <div className="space-y-7">
-    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 2 · TRUSTED TRANSFER</p>
-      <h1 className="mt-2 text-3xl font-bold">Send a file</h1><p className="mt-2 text-white/55">Send directly to a paired device or share a one-time code with anyone. No file bytes pass through Supabase.</p></div>
+    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 3 · PENDING FIRST</p>
+      <h1 className="mt-2 text-3xl font-bold">Send a file</h1><p className="mt-2 text-white/55">Queue files for paired devices even while they are offline, or share a one-time code. No file bytes pass through Supabase.</p></div>
     <Card className="space-y-5 p-6 sm:p-8">
       <label className="block text-sm font-medium" htmlFor="send-target">Recipient</label>
       <select id="send-target" value={target} disabled={busy || !!code} onChange={e=>setTarget(e.target.value)}
@@ -197,7 +202,7 @@ export default function SendPage() {
         <span className="mt-2 text-xs text-white/45">Streams in 64 KiB chunks. Disk-write acknowledgements cap buffering.</span>
       </button>
       {file && <div className="flex items-center gap-3 rounded-xl bg-white/5 p-4"><FileUp size={20} className="text-violet-300"/><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-white/45">{fmt(file.size)}</p></div></div>}
-      {!code && !busy && !complete ? <Button onClick={() => void send()} disabled={!file || busy} className="w-full"><Wifi size={17}/> {target ? "Send to trusted contact" : "Start secure transfer"}</Button> : code ? <div className="space-y-3 rounded-2xl border border-violet-300/20 bg-violet-500/10 p-5 text-center">
+      {!code && !busy && !complete ? <Button onClick={() => void send()} disabled={!file || busy} className="w-full"><Wifi size={17}/> {target ? "Queue for trusted contact" : "Start secure transfer"}</Button> : code ? <div className="space-y-3 rounded-2xl border border-violet-300/20 bg-violet-500/10 p-5 text-center">
         <p className="text-xs uppercase tracking-widest text-violet-200">One-time code · valid 10 minutes</p>
         <p className="font-mono text-5xl font-black tracking-[0.13em] text-white">{code}</p>
         <div className="flex justify-center gap-2"><Button variant="secondary" size="sm" onClick={() => void navigator.clipboard.writeText(code)}><Copy size={15}/> Copy</Button>
@@ -213,6 +218,6 @@ export default function SendPage() {
       <p className="flex items-center gap-2 text-xs text-white/45"><ShieldCheck size={15}/> WebRTC encrypts file content. Trusted recipients may auto-save to private Inbox if safety rules permit.</p>
     </Card>
     <p className="text-sm text-white/55">Receiving? <Link className="font-semibold text-violet-300 underline" href="/receive">Enter a transfer code</Link>.</p>
-    <p className="text-xs text-amber-200/80">Pause/resume works only while the existing connection remains active. Offline pending and reconnect-resume belong to Phase 3. Without TURN, some networks cannot connect.</p>
+    <p className="text-xs text-amber-200/80">Pause/resume works only while the existing connection remains active. Paired-contact transfers are now queued locally for foreground retry and reconnect-resume; browser background delivery remains unavailable. Without TURN, some networks cannot connect.</p>
   </div>;
 }

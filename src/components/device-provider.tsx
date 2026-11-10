@@ -12,7 +12,7 @@ interface DeviceContextValue {
   device: DeviceRecord | null;
   error: string | null;
   registerDevice: (name: string) => Promise<void>;
-  updatePreferences: (values: Partial<Pick<DeviceRecord, "is_available" | "wifi_only">>) => Promise<void>;
+  updatePreferences: (values: Partial<Pick<DeviceRecord, "is_available" | "wifi_only" | "availability_mode" | "download_on_data">>) => Promise<void>;
   retry: () => void;
 }
 const DeviceContext = createContext<DeviceContextValue | null>(null);
@@ -89,7 +89,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updatePreferences = useCallback(async (values: Partial<Pick<DeviceRecord, "is_available" | "wifi_only">>) => {
+  const updatePreferences = useCallback(async (values: Partial<Pick<DeviceRecord, "is_available" | "wifi_only" | "availability_mode" | "download_on_data">>) => {
     if (!device) return;
     const client = getSupabase();
     if (!client) throw new Error("Supabase unavailable");

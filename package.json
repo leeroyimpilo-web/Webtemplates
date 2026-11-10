@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test:protocol": "node --test tests/transfer.test.cjs",
     "test:pairing": "node --test tests/pairing.test.cjs",
-    "test:all": "node --test tests/transfer.test.cjs tests/pairing.test.cjs"
+    "test:all": "node --test tests/*.test.cjs",
+    "test:presence": "node --test tests/presence.test.cjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.2.3",

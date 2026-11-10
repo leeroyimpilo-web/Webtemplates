@@ -23,3 +23,11 @@ Apply database migration `supabase/phase2_pairing_and_trust.sql` after Phase 0 a
 **Hard limits:** browser must be open to auto-receive; default WiFi-only blocks unknown network type from auto-save; auto files >= 5 GiB require confirmation; executables are not auto-accepted. Storage is private OPFS, not Downloads. No files stored on Supabase. Peer connection without TURN is not reliable on all networks. Offline queue, background service, and reconnection resume are future phases.
 
 Details: [Phase 2 testing and security notes](docs/PHASE2_REMOTE_PAIRING.md); Phase 1 outstanding tests in docs/PHASE1_SPRINT2.md.
+
+## Phase 3 development branch
+
+See [Phase 3 implementation and limitations](docs/PHASE3.md). Apply
+`supabase/phase3_presence_and_pending.sql` to the dedicated PEND project before
+running this branch. There is no automatic background transfer when the PWA is
+closed; the browser worker retries **only while PEND is open**. The source file
+must remain in the sender's IndexedDB (it is not uploaded to the server).

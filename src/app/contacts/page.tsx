@@ -1,4 +1,5 @@
 "use client";
+import { derivePresence } from "@/lib/presence.mjs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -97,7 +98,7 @@ export default function ContactsPage() {
   };
 
   return <div className="space-y-7">
-    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 2 · TRUSTED PAIRING</p>
+    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 3 · TRUSTED CONTACTS</p>
       <h1 className="mt-2 text-3xl font-bold">Contacts</h1>
       <p className="mt-2 max-w-2xl text-sm text-white/60">Pair anywhere with a six-digit code. Both devices review fingerprints and approve. A code expires after ten minutes and can be used once.</p>
     </div>
@@ -145,7 +146,7 @@ export default function ContactsPage() {
       {!paired.length && <Card className="p-6 text-sm text-white/50">No trusted devices yet. Complete confirmation on both sides.</Card>}
       {paired.map(c => <Card key={c.pairing.id} className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><ShieldCheck size={22}/></span>
-          <div><h3 className="font-semibold">{c.peer.device_name}</h3><p className="text-xs text-white/50">{c.peer.platform} · {c.peer.is_online && c.peer.is_available ? "Available" : "Offline / availability unverified"}</p>
+          <div><h3 className="font-semibold">{c.peer.device_name}</h3><p className="text-xs text-white/50">{c.peer.platform} · {derivePresence(c.peer).label}</p>
             <p className="mt-1 text-xs text-white/40">Last seen: {niceTime(c.peer.last_seen)} · {c.peer.device_fingerprint.slice(0,16)}…</p></div></div>
         <div className="flex shrink-0 flex-wrap gap-2"><Button size="sm" asChild><Link href={`/send?to=${encodeURIComponent(c.peer.id)}`}>Send file</Link></Button>
           <Button size="sm" variant="destructive" disabled={busy} onClick={()=>void act(c,"revoke")}>Revoke</Button></div>

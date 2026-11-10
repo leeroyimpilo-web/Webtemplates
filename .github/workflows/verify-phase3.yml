@@ -1,0 +1,25 @@
+name: Verify PEND Phase 3
+on:
+  push:
+    branches: [pend-phase3]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund --ignore-scripts
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Protocol, pairing, presence and resume tests
+        run: npm run test:all
+      - name: Next.js production build
+        run: npm run build

@@ -197,3 +197,31 @@ test('receiver repeats hello until sender appears, then stops on close', async (
   await new Promise(resolve => setTimeout(resolve, 35));
   assert.equal(outbound.length, afterClose, 'no leaked retry timer after close');
 });
+
+test('reconnect resumes from receiver-confirmed 64 KiB boundary, never re-sends prefix', async () => {
+  const size = CHUNK_BYTES * 23 + 123;
+  const offset = CHUNK_BYTES * 8;
+  const file = makeFile(size);
+  const channel = new MockChannel();
+  const confirmed = [];
+  const sender = new TransferSender(channel, file, new AbortController().signal, n => confirmed.push(n), () => {});
+  let sentBytes = offset;
+  channel.onSend = message => {
+    if (!(message instanceof ArrayBuffer)) return;
+    sentBytes += message.byteLength;
+    if (sentBytes - offset === ACK_WINDOW_BYTES || sentBytes === size) {
+      queueMicrotask(() => sender.acknowledge(sentBytes));
+    }
+  };
+  await sender.start(offset);
+  assert.equal(sentBytes, size);
+  assert.equal(sender.confirmedBytes, size);
+  assert.equal(confirmed[0], offset);
+  assert.equal(channel.messages.filter(m => m instanceof ArrayBuffer).reduce((n,m)=>n+m.byteLength,0),size-offset);
+});
+
+test('resume rejects arbitrary unaligned offsets', async () => {
+  const channel = new MockChannel();
+  const sender = new TransferSender(channel, makeFile(CHUNK_BYTES*2), new AbortController().signal,()=>{},()=>{});
+  await assert.rejects(sender.start(12345),/resume offset/i);
+});

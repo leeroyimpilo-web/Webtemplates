@@ -9,6 +9,9 @@ export interface DeviceRecord {
   is_online: boolean;
   is_available: boolean;
   wifi_only: boolean;
+  network_type: "wifi" | "ethernet" | "cellular" | "unknown";
+  availability_mode: "available" | "busy" | "invisible";
+  download_on_data: boolean;
   created_at: string;
 }
 

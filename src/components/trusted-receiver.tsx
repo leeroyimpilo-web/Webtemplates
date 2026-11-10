@@ -57,6 +57,24 @@ export function TrustedReceiver() {
     active.current = false; activeRoom.current = null;
   }, []);
 
+  const preservePartial = useCallback(async () => {
+    if (!active.current) return;
+    active.current = false;
+    // Do not abort/truncate an OPFS file after a temporary network loss.
+    try { await writeChain.current; } catch { /* Failed write is handled elsewhere. */ }
+    if (writer.current) {
+      await writer.current.close().catch(() => undefined);
+      writer.current = null;
+    }
+    const room=activeRoom.current;
+    if (room) {
+      await db.offsets.put({transferId:room.transfer_id,bytesTransferred:written.current,updatedAt:Date.now()});
+      handled.current.delete(room.transfer_id);
+    }
+    close();
+    setStatus("Connection interrupted. Partial file saved; it can resume when the sender reconnects.");
+  }, [close]);
+
   const fail = useCallback(async (message: string) => {
     setError(message); setStatus("");
     try { if (dcRef.current?.readyState === "open") sendControl(dcRef.current, { type: "error", message: "Receiver cancelled or could not save file." }); }
@@ -76,10 +94,16 @@ export function TrustedReceiver() {
       folder.current = await privateInbox();
       opfsName.current = `${room.transfer_id}_${safeFileName(room.file_name)}`;
       const file = await folder.current.getFileHandle(opfsName.current, { create: true });
-      writer.current = await file.createWritable();
-      written.current = 0; acknowledged.current = 0;
+      const existing = await file.getFile();
+      const size = transferHeader.current.file_size;
+      if (existing.size > size) throw new Error("Saved partial exceeds authorized file length.");
+      const resume = existing.size === size ? size : Math.floor(existing.size / CHUNK_BYTES) * CHUNK_BYTES;
+      writer.current = await file.createWritable({ keepExistingData: true });
+      if (resume !== existing.size) await writer.current.truncate(resume);
+      await writer.current.seek(resume);
+      written.current = resume; acknowledged.current = resume;
       setOffer(null); setStatus(`Receiving ${room.file_name} into private Inbox…`);
-      sendControl(dc, { type: "ready", resume_from_byte: 0 });
+      sendControl(dc, { type: "ready", resume_from_byte: written.current });
     } catch (cause) {
       await fail(cause instanceof Error ? cause.message : "Inbox storage unavailable.");
     }
@@ -110,7 +134,7 @@ export function TrustedReceiver() {
         const conn = new SupabaseRtcPeer({client,deviceId:device.id,roomId:room.room_id,role:"receiver",
           onState: state => {
             if (state === "disconnected" && !finished.current) {
-              void fail("Trusted sender disconnected before transfer completed.");
+              void preservePartial();
             }
           },
           onChannel: dc => {
@@ -129,7 +153,7 @@ export function TrustedReceiver() {
                     const network = (navigator as BrowserNetwork).connection?.type ?? "unknown";
                     const eligible = assessAutoReceive({paired:true,pinned:true,revoked:false,
                       available:device.is_available, fileName:msg.file_name,fileSize:msg.file_size,
-                      wifiOnly:device.wifi_only,networkType:network,online:navigator.onLine,
+                      wifiOnly:device.wifi_only && !device.download_on_data,networkType:network,online:navigator.onLine,
                       hasPrivateInbox:typeof navigator.storage?.getDirectory === "function"});
                     if (eligible.auto) void beginWrite();
                     else {setOffer({room,reason:eligible.reason});setStatus("Manual approval required by your safety settings.");}
@@ -138,6 +162,12 @@ export function TrustedReceiver() {
                       throw new Error("File incomplete or not accepted.");
                     }
                     await writer.current.close(); writer.current=null;
+                    const client = getSupabase();
+                    if (!client || !device) throw new Error("Cannot confirm completed file to server.");
+                    const result = await client.rpc("complete_received_transfer",{
+                      p_receiver_device_id:device.id,p_transfer_id:room.transfer_id,
+                    });
+                    if (result.error || result.data !== true) throw result.error ?? new Error("Server rejected completed file.");
                     await db.inbox.put({transferId:room.transfer_id,fileName:room.file_name,
                       fileSize:written.current,senderId:room.sender_device_id,receivedAt:Date.now(),opfsName:opfsName.current});
                     await db.offsets.delete(room.transfer_id);
@@ -156,9 +186,24 @@ export function TrustedReceiver() {
                   written.current += event.data.byteLength;
                   setProgress(transferHeader.current.file_size ? Math.min(100,100*written.current/transferHeader.current.file_size) : 100);
                   if (written.current - acknowledged.current >= ACK_WINDOW_BYTES || written.current === transferHeader.current.file_size) {
-                    acknowledged.current=written.current;
-                    if (dc.readyState === "open") sendControl(dc,{type:"ack",received_bytes:written.current});
+                    // A FileSystemWritableFileStream may buffer changes until close.
+                    // Commit each 1 MiB checkpoint before ACK, so a killed browser
+                    // can resume from durable OPFS bytes instead of losing progress.
+                    await writer.current.close();
+                    const committed = written.current;
+                    const handle = await folder.current!.getFileHandle(opfsName.current);
+                    writer.current = await handle.createWritable({ keepExistingData: true });
+                    await writer.current.seek(committed);
+                    acknowledged.current=committed;
+                    if (dc.readyState === "open") sendControl(dc,{type:"ack",received_bytes:committed});
                     await db.offsets.put({transferId:room.transfer_id,bytesTransferred:written.current,updatedAt:Date.now()});
+                    const client = getSupabase();
+                    if (client && device) {
+                      const result = await client.rpc("record_received_bytes",{
+                        p_receiver_device_id:device.id,p_transfer_id:room.transfer_id,p_bytes:written.current,
+                      });
+                      if (result.error || result.data !== true) throw result.error ?? new Error("Server rejected progress update.");
+                    }
                   }
                 }
               }).catch(cause => { if (!finished.current) void fail(cause instanceof Error ? cause.message : "Could not receive file."); });
@@ -169,13 +214,13 @@ export function TrustedReceiver() {
         try {await conn.start();} catch (cause) {await fail(cause instanceof Error ? cause.message : "Could not join trusted transfer.");}
       }
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not check trusted Inbox."); }
-  }, [device, beginWrite, fail, close]);
+  }, [device, beginWrite, fail, close, preservePartial]);
 
   useEffect(() => {
     const timer = window.setInterval(() => void checkIncoming(), 5000);
     void checkIncoming();
-    return () => { clearInterval(timer); close(); void abortLocal(); };
-  }, [checkIncoming, close, abortLocal]);
+    return () => { clearInterval(timer); if (active.current) void preservePartial(); else close(); };
+  }, [checkIncoming, close, preservePartial]);
 
   if (!offer && !error && !status) return null;
   return <div className="fixed bottom-22 right-4 z-50 w-[min(23rem,calc(100vw-2rem))] rounded-2xl border border-violet-300/30 bg-[#172038] p-4 shadow-2xl shadow-black/60 md:bottom-6">
@@ -189,7 +234,11 @@ export function TrustedReceiver() {
       <p className="flex items-start gap-2 text-xs text-amber-200"><ShieldAlert size={16} className="shrink-0"/> {offer.reason}</p>
       <p className="text-xs text-white/60">{(offer.room.file_size/1048576).toFixed(1)} MiB · File stays in PEND Inbox and never opens automatically.</p>
       <div className="flex gap-2"><Button size="sm" onClick={()=>void beginWrite()}><Download size={15}/> Accept to Inbox</Button>
-        <Button size="sm" variant="outline" onClick={()=>void fail("Incoming transfer declined.")}>Decline</Button></div>
+        <Button size="sm" variant="outline" onClick={()=>void (async()=>{
+          const client=getSupabase();
+          if(client&&device) await client.rpc("cancel_queued_transfer",{p_my_device_id:device.id,p_transfer_id:offer.room.transfer_id});
+          await fail("Incoming transfer declined.");
+        })()}>Decline</Button></div>
     </div>}
     {active.current && progress > 0 && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-cyan-300 transition-all" style={{width:`${progress}%`}}/></div>}
   </div>;
