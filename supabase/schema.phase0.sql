@@ -149,3 +149,8 @@ revoke all on public.devices, public.pairings, public.transfers, public.transfer
 
 -- Make all rows private by default. In Phase 1, explicitly design/authorize
 -- Supabase Realtime signaling channels and publication settings.
+
+-- Index both pair membership FKs and requester FK; aids joins and cascade deletes.
+create index if not exists pairings_device_a_idx on public.pairings(device_a_id);
+create index if not exists pairings_device_b_idx on public.pairings(device_b_id);
+create index if not exists transfer_requests_requester_idx on public.transfer_requests(requester_device_id);
