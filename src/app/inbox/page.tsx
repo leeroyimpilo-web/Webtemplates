@@ -18,23 +18,44 @@ export default function InboxPage() {
     }).catch(cause => { if (alive) { setLoading(false); setError(String(cause)); } });
     return () => { alive = false; };
   }, []);
-  const forget = async (transferId: string) => {
-    await db.inbox.delete(transferId);
-    setItems(list => list.filter(item => item.transferId !== transferId));
+  const forget = async (item: InboxItem) => {
+    try {
+      if (item.opfsName && typeof navigator.storage?.getDirectory === "function") {
+        const root = await navigator.storage.getDirectory();
+        const folder = await root.getDirectoryHandle("pend-inbox");
+        await folder.removeEntry(item.opfsName).catch(() => undefined);
+      }
+      await db.inbox.delete(item.transferId);
+      setItems(list => list.filter(row => row.transferId !== item.transferId));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Cannot delete this file."); }
+  };
+  const download = async (item: InboxItem) => {
+    try {
+      if (!item.opfsName || typeof navigator.storage?.getDirectory !== "function") throw new Error("Saved outside PEND. Open it from your device folder.");
+      const root = await navigator.storage.getDirectory();
+      const folder = await root.getDirectoryHandle("pend-inbox");
+      const handle = await folder.getFileHandle(item.opfsName);
+      const file = await handle.getFile();
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url; link.download = item.fileName; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download this file."); }
   };
   return <div className="space-y-7">
     <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">LOCAL DEVICE HISTORY</p><h1 className="mt-2 text-3xl font-bold">Inbox</h1>
-      <p className="mt-2 text-white/50">Completed downloads you saved on this device. PEND stores only their metadata here.</p></div>
+      <p className="mt-2 text-white/50">Completed downloads on this device. Trusted transfers stay in PEND's private browser storage until you choose to download them.</p></div>
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
     {items.length ? <div className="space-y-3">{items.map(item => <Card key={item.transferId} className="flex flex-wrap items-center gap-4 p-5">
       <div className="rounded-xl bg-violet-400/10 p-3 text-violet-300"><HardDriveDownload size={20}/></div>
       <div className="min-w-0 flex-1"><p className="break-all font-semibold">{item.fileName}</p><p className="text-xs text-white/50">{(item.fileSize / 1024 / 1024).toFixed(2)} MiB · {new Date(item.receivedAt).toLocaleString()}</p>
-        <p className="mt-1 text-xs text-white/40">Already saved using your browser’s file picker. Open from your device’s chosen folder.</p></div>
-      <Button variant="outline" size="sm" onClick={() => void forget(item.transferId)}><Trash2 size={15}/> Remove history</Button>
+        <p className="mt-1 text-xs text-white/40">{item.opfsName ? "Saved privately in this browser. Tap Download to access it." : "Saved using your browser's file picker. Open from the chosen folder."}</p></div>
+      {item.opfsName && <Button size="sm" onClick={() => void download(item)}><HardDriveDownload size={15}/> Download</Button>}
+      <Button variant="outline" size="sm" onClick={() => void forget(item)}><Trash2 size={15}/> {item.opfsName ? "Delete file" : "Remove history"}</Button>
     </Card>)}</div> : <Card className="flex min-h-72 flex-col items-center justify-center p-8 text-center"><FolderOpen className="mb-5 text-cyan-300" size={36}/>
       <h2 className="text-lg font-semibold">{loading ? "Reading local history…" : "No completed downloads yet"}</h2>
       <p className="mt-2 max-w-sm text-sm leading-6 text-white/45">Enter the sender’s one-time six-digit code. Incoming files are reviewed and written directly to your chosen folder.</p>
       <Link href="/receive" className="mt-6 inline-flex rounded-xl bg-violet-500 px-5 py-3 text-sm font-bold text-white">Enter a receive code</Link></Card>}
-    <p className="flex items-center gap-2 text-xs text-white/50"><ShieldCheck size={14}/> Removing a history entry does not delete a file saved outside your browser.</p>
+    <p className="flex items-center gap-2 text-xs text-white/50"><ShieldCheck size={14}/> Private Inbox deletion removes the stored bytes. External files saved using a picker remain in their chosen folder.</p>
   </div>;
 }

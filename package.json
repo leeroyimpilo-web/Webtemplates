@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:protocol": "node --test tests/transfer.test.cjs"
+    "test:protocol": "node --test tests/transfer.test.cjs",
+    "test:pairing": "node --test tests/pairing.test.cjs",
+    "test:all": "node --test tests/transfer.test.cjs tests/pairing.test.cjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.2.3",
@@ -20,7 +22,8 @@
     "next-themes": "0.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "tailwind-merge": "3.3.1"
+    "tailwind-merge": "3.3.1",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.16",
@@ -28,6 +31,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
     "tailwindcss": "4.1.16",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@types/qrcode": "1.5.5"
   }
 }

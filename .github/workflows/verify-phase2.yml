@@ -1,0 +1,32 @@
+name: Verify PEND Phase 2
+on:
+  push:
+    branches: [pend-phase2]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies and refresh lockfile
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Static typecheck
+        run: npm run typecheck
+      - name: Protocol and auto-accept security tests
+        run: npm run test:all
+      - name: Next.js production build
+        run: npm run build
+      - name: Retain lockfile for reproducible installs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PEND-Phase2-package-lock
+          path: package-lock.json
+          retention-days: 14

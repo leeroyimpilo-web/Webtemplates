@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useDevice } from "@/components/device-provider";
 import { Onboarding } from "@/components/onboarding";
+import { TrustedReceiver } from "@/components/trusted-receiver";
 
 const nav = [
   { href: "/", label: "Home", icon: Home },
@@ -36,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-2"><span className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70"><Wifi className="mr-2 inline" size={14}/>{device.wifi_only ? "Wi-Fi preferred" : "Data allowed"}</span><span className="hidden text-xs text-white/45 sm:inline">{device.device_name}</span></div>
       </header>
       <main className="px-5 py-8 sm:px-8 md:py-10">{children}</main>
-      <footer className="mx-5 mt-10 flex items-center justify-between border-t border-white/10 py-6 text-xs text-white/30 sm:mx-8"><span>© 2026 PEND · Phase 1 Sprint 1</span><a href="https://github.com" target="_blank" rel="noopener noreferrer">Source setup <ArrowUpRight size={11} className="inline"/></a></footer>
+      <TrustedReceiver/><footer className="mx-5 mt-10 flex items-center justify-between border-t border-white/10 py-6 text-xs text-white/30 sm:mx-8"><span>© 2026 PEND · Phase 2 testing</span><a href="https://github.com" target="_blank" rel="noopener noreferrer">Source setup <ArrowUpRight size={11} className="inline"/></a></footer>
     </div>
     <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-white/10 bg-[#101523]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} className={cn("flex min-h-17 flex-col items-center justify-center gap-1 text-[10px] text-white/45", pathname === href && "text-violet-300")}><Icon size={21}/>{label}</Link>)}</nav>
   </div>;

@@ -22,6 +22,7 @@ export interface InboxItem {
   senderId: string;
   receivedAt: number;
   localBlob?: Blob;
+  opfsName?: string;    // Origin Private File System entry (never uploaded)
 }
 export interface ResumeOffset { transferId: string; bytesTransferred: number; updatedAt: number }
 export interface TrustedDevice { deviceId: string; publicKey: string; pairedAt: number }

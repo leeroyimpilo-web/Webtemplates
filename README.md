@@ -1,87 +1,25 @@
-# PEND — Peer-to-Peer File Transfer (Phase 1 Sprint 2 candidate)
+# PEND — peer-to-peer transfer (Phase 2 development)
 
-> **Development status:** Phase 1 Sprint 2 code prepared; awaiting end-to-end browser validation. **Not verified by real-device transfer testing.** Pairing, pending/resume and auto-accept are not implemented. See [Sprint 1 notes](docs/PHASE1_SPRINT1.md).
+**Prototype status: Phase 2 remote pairing and trusted in-app receipt implemented, unverified on real devices.** The user explicitly approved continuing beyond the Phase 1 acceptance tests; those issues remain logged for repair later. Do not label this app production ready.
 
-**Tagline:** Send any file, any size, to anyone. Pending until they're online. Paired once, auto-receive forever. (Product *vision*, not current implementation.)
+**Product vision:** Send any file, any size, to anyone. Pending until they are online. Paired once, auto-receive forever. Those claims describe the long-term product, not today's browser prototype.
 
-## Included
+## Quick start
 
-- Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn-compatible UI primitives, dark styling, responsive bottom navigation/sidebar.
-- PWA manifest, 192/512 icons and basic offline fallback service worker.
-- Anonymous Supabase auth and device registration with SHA-256 public key fingerprint.
-- Non-extractable ECDH P-256 private key stored in Dexie/IndexedDB, public JWK registered in Postgres. Device UUID stored in localStorage.
-- Schema for devices, pairings, pairing codes, transfers and transfer requests, with row-level security, least-privilege table grants and pairing-code isolation.
-- Home, Contacts, Inbox, Send, Settings. Preferences update Supabase after onboarding.
-- CI workflow to typecheck/build and capture package lockfile.
+```bash
+npm ci
+cp .env.example .env.local
+# Configure PEND Supabase URL and publishable key (never use a service-role key in NEXT_PUBLIC envs)
+npm run typecheck
+npm run test:all
+npm run build
+npm run dev
+```
 
-## Not included
+Apply database migration `supabase/phase2_pairing_and_trust.sql` after Phase 0 and Phase 1 migrations. Do not reapply previously run migrations to a new database without reviewing schema differences. Enable anonymous sign-ins in Supabase Auth.
 
-PeerJS adapter, TURN, trusted pairing, presence, auto-receive, pause/resume and background heartbeat are not implemented yet. The native WebRTC send/receive path is still unverified by two-browser testing. The mobile web PWA cannot guarantee background operation or indefinite retention of large pending files. Later Capacitor Android native services and storage testing are required for that promise.
+**Phase 2:** Contacts page produces 10-minute, one-use six-digit codes and QR codes; both device owners must confirm fingerprints. Paired contacts can be selected in Send, and active browsers receive P2P chunks into PEND's private Inbox if safety and network rules allow it. Revoking a pairing revokes future trusted transfer invitations.
 
-## Development
+**Hard limits:** browser must be open to auto-receive; default WiFi-only blocks unknown network type from auto-save; auto files >= 5 GiB require confirmation; executables are not auto-accepted. Storage is private OPFS, not Downloads. No files stored on Supabase. Peer connection without TURN is not reliable on all networks. Offline queue, background service, and reconnection resume are future phases.
 
-1. Use the dedicated **PEND** Supabase project in your **Sharedit** organization. Enable **Anonymous Sign-Ins** in Authentication -> Providers.
-2. The Phase 0 schema was already applied. Apply `supabase/phase1_rooms.sql` once for transfer invitation rooms and private signaling permissions. **Pairing-code tables deliberately have no browser-read policies.**
-3. Copy `.env.example` to `.env.local` and fill:
-
-   ```dotenv
-   NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_XXXXXXXXXXXXXXXX
-   TURN_URL=
-   TURN_USER=
-   TURN_PASS=
-   ```
-
-   The `NEXT_PUBLIC_SUPABASE_ANON_KEY` variable accepts Supabase’s publishable key. **Never put a secret/service-role key or TURN credentials in `NEXT_PUBLIC_` vars.**
-4. Run:
-
-   ```bash
-   npm install
-   npm run typecheck
-   npm run build
-   npm run dev
-   ```
-
-5. Browse `http://localhost:3000`, enter a device name, and confirm the device appears in `public.devices` owned by the anonymous user.
-6. Install PWA on Chrome Android/desktop via the browser’s install option **over HTTPS** (localhost permitted for development).
-
-If env vars are missing, a setup panel appears rather than fake success. No Supabase project was changed by the code alone.
-
-## Phase 0 acceptance tests
-
-- [ ] SQL applied to a dedicated PEND Supabase project; RLS checked using two anonymous clients
-- [ ] Anonymous sign-ins enabled in project
-- [ ] Project URL and publishable key configured
-- [ ] Build/typecheck successful
-- [ ] Browser prompts for device name on first visit
-- [ ] Device row inserted and accessible only to its owner; other users cannot enumerate devices
-- [ ] Device private ECDH key never uploaded; fingerprint matches public key
-- [ ] PWA install tested in an HTTPS-capable browser
-
-## Architecture & security notes
-
-- `devices.user_id` is text per specification, storing Supabase `auth.uid()::text`.
-- Public keys are metadata, but must not be trusted until paired with a mutual authentication flow in Phase 2.
-- 6-digit codes have only 1 million possibilities. Future pairing validation MUST be rate-limited and performed with a server-side protected RPC or Edge Function. The hash column is not exposed to browsers. SHA-256 alone is not a substitute for brute-force protection.
-- The `private` Postgres schema includes `SECURITY DEFINER` RLS helpers. They return booleans only, explicitly check `auth.uid()`, and are not exposed by Supabase Data API. Review database advisors before production.
-- In web browsers the file API cannot always write arbitrary folders, retain all pending multi-GB blobs indefinitely, or keep heartbeats running while the tab is closed. Phase 3 acceptance tests require device-dependent strategies and documented limits.
-- Supabase is never used for file storage: only identity, signaling and transfer metadata in future phases.
-- Two-factor device confirmation is planned before creating a trusted pairing; **no automatic trust** at registration.
-
-## Build order
-
-Phase 0 -> Phase 1 -> Phase 2 -> Phase 3 -> [request approval] -> Phase 4 -> Phase 5.
-
-User approval is required before starting the next phase. See `docs/PHASES.md`.
-
-## Phase 1 Sprint 2 status
-
-The direct sender / receiver prototype adds a 1 MiB disk-write ACK window, pause/resume on the active connection, download history and more robust error handling. See `docs/PHASE1_SPRINT2.md` for the acceptance checklist, limitations and the necessary security fixes. Run `npm run test:protocol` to test the transfer protocol. The separate SQL migration `supabase/phase1_sprint2_rate_limit.sql` must be applied after `phase1_rooms.sql`. The PEND Supabase project has already received this SQL migration. Do not store or route file bytes via Supabase.
-
-## Sprint 2 completion and QA handoff
-
-- Receiver now repeats initial WebRTC `hello` until the sender responds, avoiding a lost first broadcast when devices subscribe in the opposite order.
-- Automated protocol tests cover 64 KiB chunk boundaries, ACK windows, pause/resume, cancellation, forged ACK rejection, a **synthetic** 1 GiB stream, and signaling hello retries.
-- **A simulated 1 GiB test is not a real 1 GiB two-browser transfer**. Actual Chrome desktop/browser testing and TURN-based WAN acceptance are still required.
-- Realtime messages and Supabase rows are metadata only. Receiver requires manual saving for every file.
-- No Phase 2 (trusted pairing) or Phase 3 (offline queue) implementation has begun.
+Details: [Phase 2 testing and security notes](docs/PHASE2_REMOTE_PAIRING.md); Phase 1 outstanding tests in docs/PHASE1_SPRINT2.md.
