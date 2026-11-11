@@ -57,7 +57,9 @@ export default function ClipboardPage() {
         void (async()=>{
           const box=payload as ClipboardEnvelope;
           if(!live||box?.sender!==peer.peer.id||box?.receiver!==device.id||seen.current.has(box.id))return;
-          if(!await isTrustedLocally(peer.peer))throw new Error('Peer pairing revoked or local identity changed.');
+          const latest=await getPairingContacts(client,device.id);
+          if(!latest.some(c=>c.peer.id===peer.peer.id&&c.pairing.status==='paired') ||
+             !await isTrustedLocally(peer.peer))throw new Error('Peer pairing revoked or local identity changed.');
           const identity=await getOrCreateIdentity();
           const value=await decryptClipboard(identity.privateKey,peer.peer.public_key,box,peer.peer.id,device.id);
           seen.current.add(box.id);
@@ -77,7 +79,9 @@ export default function ClipboardPage() {
     if(!client||!device||!peer||!ch||sending)return;
     setSending(true);setError("");setNotice("");
     try {
-      if(!await isTrustedLocally(peer.peer))throw new Error('Pairing revoked; do not share clipboard text.');
+      const latest=await getPairingContacts(client,device.id);
+      if(!latest.some(c=>c.peer.id===peer.peer.id&&c.pairing.status==='paired') ||
+         !await isTrustedLocally(peer.peer))throw new Error('Pairing revoked; do not share clipboard text.');
       const identity=await getOrCreateIdentity();
       const box=await encryptClipboard(identity.privateKey,peer.peer.public_key,text,device.id,peer.peer.id);
       const result=await ch.send({type:'broadcast',event:'encrypted-clipboard',payload:box});
