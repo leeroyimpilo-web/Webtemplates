@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { getPairingContacts } from "@/lib/pairing";
 import { db } from "@/lib/db";
-import { ArrowRight, ArrowUpRight, Check, Clock3, FolderDown, Send, ShieldCheck, Users, Wifi } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, Clock3, FolderDown, Send, ShieldCheck, Users, Wifi, ClipboardCopy, FileQuestion, UsersRound } from "lucide-react";
 import { AvailabilityToggle } from "@/components/availability-toggle";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export default function HomePage() {
   return <div className="space-y-8">
     <section className="relative overflow-hidden rounded-[28px] border border-violet-300/15 bg-[radial-gradient(circle_at_90%_10%,rgba(137,96,255,.30),transparent_45%),linear-gradient(135deg,#242040,#111827)] p-7 sm:p-10">
       <div className="absolute -right-10 -top-14 size-58 rounded-full border border-white/10" aria-hidden="true" />
-      <div className="relative z-10"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-200/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-violet-200"><ShieldCheck size={14}/> Private by design · Phase 3</div>
+      <div className="relative z-10"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-200/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-violet-200"><ShieldCheck size={14}/> Private by design · Phase 4</div>
         <h1 className="max-w-xl text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">Files don’t need to wait for <span className="text-violet-300">the perfect moment.</span></h1>
         <p className="mt-4 max-w-lg text-sm leading-7 text-white/65 sm:text-base">PEND is being built to queue transfers when people are offline, and deliver to trusted devices automatically when available.</p>
         <div className="mt-7 flex flex-wrap gap-3"><Button asChild><Link href="/send"><Send size={17}/> Send a file <ArrowRight size={16}/></Link></Button><Button asChild variant="outline"><Link href="/contacts"><Users size={17}/> View contacts</Link></Button></div>
@@ -44,6 +44,11 @@ export default function HomePage() {
       <Card className="p-5"><div className="flex justify-between"><span className="text-sm text-white/50">Pending transfers</span><Clock3 className="text-amber-300" size={19}/></div><div className="mt-4 text-3xl font-bold">{pendingCount}</div><p className="mt-2 text-xs text-white/40">Durable metadata queue · Phase 3</p></Card>
       <Card className="p-5"><div className="flex justify-between"><span className="text-sm text-white/50">Paired contacts</span><Users className="text-cyan-300" size={19}/></div><div className="mt-4 text-3xl font-bold">{pairedCount}</div><p className="mt-2 text-xs text-white/40">Mutually confirmed trusted devices</p></Card>
       <Card className="p-5"><div className="flex justify-between"><span className="text-sm text-white/50">Received files</span><FolderDown className="text-violet-300" size={19}/></div><div className="mt-4 text-3xl font-bold">{inboxCount}</div><p className="mt-2 text-xs text-white/40">Saved on this device</p></Card>
+    </section>
+    <section className="grid gap-3 sm:grid-cols-3">
+      <Link href="/groups" className="flex items-center gap-3 rounded-2xl border border-violet-300/20 bg-violet-400/5 p-4 text-sm font-semibold"><UsersRound className="text-violet-300" size={19}/> Send to a group <ArrowRight size={15} className="ml-auto"/></Link>
+      <Link href="/requests" className="flex items-center gap-3 rounded-2xl border border-violet-300/20 bg-violet-400/5 p-4 text-sm font-semibold"><FileQuestion className="text-violet-300" size={19}/> Request a file <ArrowRight size={15} className="ml-auto"/></Link>
+      <Link href="/clipboard" className="flex items-center gap-3 rounded-2xl border border-violet-300/20 bg-violet-400/5 p-4 text-sm font-semibold"><ClipboardCopy className="text-violet-300" size={19}/> Encrypted clipboard <ArrowRight size={15} className="ml-auto"/></Link>
     </section>
     <PendingPanel/>
     <section className="grid gap-4 md:grid-cols-[1.3fr_1fr]"><Card className="p-6"><div className="flex items-center justify-between"><h3 className="font-bold">Getting started</h3><span className="text-xs text-violet-300">Step 1 of 3</span></div><div className="mt-6 space-y-5"><div className="flex gap-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-400/15 text-emerald-300"><Check size={18}/></span><div><p className="font-medium">Register your device</p><p className="mt-1 text-xs text-white/45">A unique public key keeps your identity separate.</p></div></div><div className="flex gap-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white/35">2</span><div><p className="font-medium text-white/65">Pair with another device</p><p className="mt-1 text-xs text-white/45">Use Contacts to generate a code and confirm on both devices.</p></div></div><div className="flex gap-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white/35">3</span><div><p className="font-medium text-white/65">Send anything</p><p className="mt-1 text-xs text-white/45">One-time code transfers are in Phase 1 testing.</p></div></div></div></Card>

@@ -11,6 +11,7 @@ import { getTrustedRoom, type TrustedTransferRoom } from "@/lib/transfer/trusted
 import { SupabaseRtcPeer } from "@/lib/transfer/rtc";
 import { ACK_WINDOW_BYTES, CHUNK_BYTES, parseControl, safeFileName, sendControl, validateHeader, type TransferHeader } from "@/lib/transfer/stream";
 import { assessAutoReceive } from "@/lib/transfer/auto-policy.mjs";
+import { acceptPreviewChunk } from "@/lib/transfer/thumbnail.mjs";
 
 type Offer = { room: TrustedTransferRoom; reason: string };
 type BrowserNetwork = Navigator & { connection?: { type?: string } };
@@ -30,6 +31,8 @@ export function TrustedReceiver() {
   const { device } = useDevice();
   const [offer, setOffer] = useState<Offer | null>(null);
   const [progress, setProgress] = useState(0);
+  const [thumbnail,setThumbnail] = useState("");
+  const parts = useRef<{total:number|null;parts:Map<number,string>}>({total:null,parts:new Map()});
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const peer = useRef<SupabaseRtcPeer | null>(null);
@@ -130,6 +133,7 @@ export function TrustedReceiver() {
         active.current = true; handled.current.add(transfer.id); activeRoom.current = room;
         written.current = 0; acknowledged.current = 0;
         finished.current = false; transferHeader.current = null; writeChain.current = Promise.resolve();
+        setThumbnail(""); parts.current={total:null,parts:new Map()};
         setStatus(`Connecting to trusted sender ${contact.peer.device_name}…`);
         const conn = new SupabaseRtcPeer({client,deviceId:device.id,roomId:room.room_id,role:"receiver",
           onState: state => {
@@ -143,7 +147,10 @@ export function TrustedReceiver() {
               writeChain.current = writeChain.current.then(async () => {
                 if (typeof event.data === "string") {
                   const msg = parseControl(event.data);
-                  if (msg.type === "header") {
+                  if (msg.type === "preview") {
+                    const data=acceptPreviewChunk(parts.current,msg,room.transfer_id);
+                    if(data)setThumbnail(data);
+                  } else if (msg.type === "header") {
                     validateHeader(msg);
                     if (msg.transfer_id !== room.transfer_id || msg.file_name !== room.file_name ||
                         msg.file_size !== room.file_size || msg.file_type !== room.file_type || transferHeader.current) {
@@ -231,6 +238,7 @@ export function TrustedReceiver() {
     {error && <p role="alert" className="mt-2 text-xs text-rose-200">{error}</p>}
     {offer && <div className="mt-3 space-y-3 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3">
       <p className="break-all text-sm font-semibold">{offer.room.file_name}</p>
+      {thumbnail&&<img alt="Incoming file thumbnail" src={thumbnail} className="max-h-44 w-full rounded-xl object-contain"/>}
       <p className="flex items-start gap-2 text-xs text-amber-200"><ShieldAlert size={16} className="shrink-0"/> {offer.reason}</p>
       <p className="text-xs text-white/60">{(offer.room.file_size/1048576).toFixed(1)} MiB · File stays in PEND Inbox and never opens automatically.</p>
       <div className="flex gap-2"><Button size="sm" onClick={()=>void beginWrite()}><Download size={15}/> Accept to Inbox</Button>

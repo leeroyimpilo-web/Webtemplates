@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, CircleHelp, ContactRound, Home, Inbox, LoaderCircle, Send, Settings2, Wifi, UsersRound, FileQuestion } from "lucide-react";
+import { ArrowUpRight, CircleHelp, ContactRound, Home, Inbox, LoaderCircle, Send, Settings2, Wifi, UsersRound, FileQuestion, ClipboardCopy } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ const nav = [
 const desktopNav = [...nav,
   { href: "/groups", label: "Groups", icon: UsersRound },
   { href: "/requests", label: "Requests", icon: FileQuestion },
+  { href: "/clipboard", label: "Clipboard", icon: ClipboardCopy },
 ];
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

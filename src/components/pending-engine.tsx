@@ -7,6 +7,7 @@ import { useDevice } from "@/components/device-provider";
 import { getSupabase } from "@/lib/supabase";
 import { db, type PendingTransfer } from "@/lib/db";
 import { getOutgoingQueue } from "@/lib/queue";
+import { sendThumbnail } from "@/lib/transfer/create-thumbnail";
 import { getPairingContacts, isTrustedLocally } from "@/lib/pairing";
 import { shouldActivateTransfer } from "@/lib/presence.mjs";
 import { SupabaseRtcPeer } from "@/lib/transfer/rtc";
@@ -68,12 +69,14 @@ export function PendingEngine() {
         peer=new SupabaseRtcPeer({client,roomId:res.data.room_id,deviceId:senderId,role:"sender",
           onState:state=>{if(state==="disconnected"&&!finished)void done(false,"Connection interrupted. Will retry while both apps are open.");},
           onChannel:dc=>{
-            dc.onopen=()=>{
+            dc.onopen=()=>{void (async()=>{
+              await sendThumbnail(dc,file,entry.transferId);
+              if(dc.readyState!=="open")return;
               const header:TransferControl={type:"header",protocol:2,transfer_id:entry.transferId,
                 file_name:entry.fileName,file_size:file.size,file_type:fileType || "application/octet-stream",
                 total_chunks:Math.ceil(file.size/CHUNK_BYTES),chunk_size:65536};
               sendControl(dc,header);
-            };
+            })().catch(err=>void done(false,err instanceof Error?err.message:"Could not send header"));};
             dc.onmessage=(event:MessageEvent)=>{
               if(typeof event.data!=="string"||settled)return;
               try {

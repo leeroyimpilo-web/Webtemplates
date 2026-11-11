@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { useDevice } from "@/components/device-provider";
 import { getSupabase } from "@/lib/supabase";
 import { createTransferRoom, randomTransferCode } from "@/lib/transfer/rooms";
-import { SupabaseRtcPeer, type PeerState } from "@/lib/transfer/rtc";
+import { SupabaseRtcPeer, type PeerState, type RouteHint } from "@/lib/transfer/rtc";
 import { CHUNK_BYTES, TransferSender, parseControl, sendControl, type TransferControl } from "@/lib/transfer/stream";
 import { db } from "@/lib/db";
 import { createFolderPackage } from "@/lib/folder-package.mjs";
+import { sendThumbnail } from "@/lib/transfer/create-thumbnail";
 import { queueTrustedFile } from "@/lib/queue";
 import { getPairingContacts, isTrustedLocally, type PairingContact } from "@/lib/pairing";
 
@@ -43,6 +44,7 @@ export default function SendPage() {
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState("");
   const [speed, setSpeed] = useState(0);
+  const [route,setRoute] = useState<RouteHint>("unknown");
 
   useEffect(() => () => { abort.current?.abort(); peer.current?.close(); }, []);
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function SendPage() {
     if (!file || !device || busy) return;
     const client = getSupabase();
     if (!client) { setError("Supabase is not connected."); return; }
-    setError(""); setBusy(true); setComplete(false); setProgress(0); setPaused(false); setSpeed(0);
+    setError(""); setBusy(true); setComplete(false); setProgress(0); setPaused(false); setSpeed(0);setRoute("unknown");
     abort.current?.abort(); peer.current?.close();
     abort.current = new AbortController();
     selectedFile.current = file;
@@ -90,6 +92,7 @@ export default function SendPage() {
         client, roomId, deviceId: device.id, role: "sender",
         onState: next => {
           setState(next);
+          if(next==="connected")void peer.current?.getConnectionRoute().then(setRoute).catch(()=>undefined);
           if (next === "disconnected" && !finished.current) {
             abort.current?.abort(); setBusy(false);
             setError("Connection lost. Restart the transfer using a fresh code; reconnect-resume belongs to Phase 3.");
@@ -102,15 +105,19 @@ export default function SendPage() {
             if (!selected) return;
             const id = transferId.current || crypto.randomUUID();
             transferId.current = id;
-            const header: TransferControl = {
+            void (async () => {
+              await sendThumbnail(dc, selected, id);
+              if (dc.readyState !== "open") return;
+              const header: TransferControl = {
               type: "header", protocol: 2, transfer_id: id,
               file_name: selected.name, file_size: selected.size,
               file_type: selected.type || "application/octet-stream",
               total_chunks: Math.ceil(selected.size / CHUNK_BYTES), chunk_size: 65536,
             };
-            sendControl(dc, header);
-            setStatus(trusted ? "Connected. Waiting for trusted Inbox policy or user approval." :
-              "Connected. Waiting for your recipient to manually choose a save location.");
+              sendControl(dc, header);
+              setStatus(trusted ? "Connected. Waiting for trusted Inbox policy or user approval." :
+                "Connected. Waiting for your recipient to manually choose a save location.");
+            })().catch(cause=>setError(cause instanceof Error ? cause.message : "Thumbnail/header could not be delivered."));
           };
           dc.onmessage = (event: MessageEvent) => {
             if (typeof event.data !== "string") return;
@@ -234,6 +241,11 @@ export default function SendPage() {
         <p className="text-xs text-white/45">This does not establish trusted pairing.</p>
       </div> : null}
       <p role="status" className="text-sm text-white/60">{status} {(code || target) && <span className="text-violet-300">({state})</span>}</p>
+      {route!=="unknown" && <p className="rounded-xl bg-cyan-400/5 p-3 text-xs text-cyan-200">
+        {route==="turn-relay"?"Connection uses a TURN relay." : route==="direct-host" ?
+          "Direct host-to-host connection (possibly local LAN). Mobile-data use cannot be confirmed." :
+          "Direct peer connection established. Same-Wi-Fi location is not verified."}
+      </p>}
       {file && (code || target) && (busy || complete) && <div className="space-y-2"><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-violet-400 transition-all" style={{ width: `${file.size === 0 ? complete ? 100 : 0 : Math.min(100, progress / file.size * 100)}%` }}/></div>
         <p className="text-xs text-white/55">{fmt(progress)} of {fmt(file.size)} confirmed received · {fmt(speed)}/s {speed > 0 && progress < file.size && `· ETA ${Math.ceil((file.size-progress)/speed)}s`} {complete && "· Saved"}</p></div>}
       {error && <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
@@ -243,6 +255,7 @@ export default function SendPage() {
     </Card>
     <p className="text-sm text-white/55">Need a file from someone? <Link className="font-semibold text-violet-300 underline" href="/requests">Request a file</Link>.</p>
     <p className="text-sm text-white/55">Receiving? <Link className="font-semibold text-violet-300 underline" href="/receive">Enter a transfer code</Link>.</p>
+    <p className="text-xs text-white/50">Nearby mode: browsers use WebRTC ICE to prefer viable direct routes. Automatic mDNS device discovery and a guaranteed “No mobile data used” badge require native device APIs and route verification; not available in the current PWA.</p>
     <p className="text-xs text-amber-200/80">Pause/resume works only while the existing connection remains active. Paired-contact transfers are now queued locally for foreground retry and reconnect-resume; browser background delivery remains unavailable. Without TURN, some networks cannot connect.</p>
   </div>;
 }

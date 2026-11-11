@@ -11,6 +11,7 @@ import { joinTransferRoom } from "@/lib/transfer/rooms";
 import { SupabaseRtcPeer, type PeerState } from "@/lib/transfer/rtc";
 import { ACK_WINDOW_BYTES, CHUNK_BYTES, openSavePicker, parseControl, sendControl, validateHeader, type TransferHeader } from "@/lib/transfer/stream";
 import { db } from "@/lib/db";
+import { acceptPreviewChunk } from "@/lib/transfer/thumbnail.mjs";
 
 export default function ReceivePage() {
   const { device } = useDevice();
@@ -20,6 +21,8 @@ export default function ReceivePage() {
   const [error, setError] = useState("");
   const [header, setHeader] = useState<TransferHeader | null>(null);
   const [written, setWritten] = useState(0);
+  const [thumbnail,setThumbnail] = useState("");
+  const previewParts = useRef<{total:number|null;parts:Map<number,string>}>({total:null,parts:new Map()});
   const [speed, setSpeed] = useState(0);
   const [complete, setComplete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,7 +46,7 @@ export default function ReceivePage() {
     const client = getSupabase();
     if (!client) { setError("Supabase not configured."); return; }
     setError(""); setBusy(true); setWritten(0); setComplete(false); setAccepted(false); setPaused(false); setSpeed(0);
-    peer.current?.close(); writeChain.current = Promise.resolve(); bytes.current = 0; lastAck.current = 0; finished.current = false; headerRef.current = null; setHeader(null);
+    peer.current?.close(); writeChain.current = Promise.resolve(); bytes.current = 0; lastAck.current = 0; finished.current = false; headerRef.current = null; setHeader(null);setThumbnail("");previewParts.current={total:null,parts:new Map()};
     try {
       const roomId = await joinTransferRoom(client, device.id, code);
       roomRef.current = roomId;
@@ -66,7 +69,10 @@ export default function ReceivePage() {
             writeChain.current = writeChain.current.then(async () => {
               if (typeof event.data === "string") {
                 const message = parseControl(event.data);
-                if (message.type === "header") {
+                if (message.type === "preview") {
+                  const data=acceptPreviewChunk(previewParts.current,message,message.transfer_id);
+                  if(data)setThumbnail(data);
+                } else if (message.type === "header") {
                   if (headerRef.current) throw new Error("Unexpected second file header.");
                   validateHeader(message);
                   headerRef.current = message; setHeader(message);
@@ -168,6 +174,7 @@ export default function ReceivePage() {
       <Button className="w-full" onClick={() => void connect()} disabled={busy || code.length !== 6}>Connect to sender</Button>
       <p role="status" className="text-sm text-white/60">{status} {busy && `(${state})`}</p>
       {header && <div className="space-y-4 rounded-2xl border border-white/15 bg-white/5 p-5"><p className="break-all font-semibold">Incoming: {header.file_name}</p>
+        {thumbnail&&<img alt="Sender's file preview" src={thumbnail} className="max-h-56 w-full rounded-xl object-contain"/>}
         <p className="text-xs text-white/50">{(header.file_size / (1024 * 1024)).toFixed(2)} MiB · {header.file_type}</p>
         {!accepted && !complete && busy && <div className="flex flex-wrap gap-3"><Button onClick={() => void accept()}><Download size={17}/> Choose save location & accept</Button><Button variant="outline" onClick={decline}>Decline</Button></div>}
         {accepted && !complete && <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={togglePause}>{paused ? <Play size={16}/> : <Pause size={16}/>} {paused ? "Resume" : "Pause"}</Button><Button variant="outline" onClick={decline}>Cancel</Button></div>}

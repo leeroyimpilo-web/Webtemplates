@@ -22,7 +22,8 @@ export type TransferControl = TransferHeader | { type: "ready"; resume_from_byte
   | { type: "ack"; received_bytes: number }
   | { type: "pause" } | { type: "resume" }
   | { type: "end" } | { type: "cancel" } | { type: "finished" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "preview"; transfer_id: string; index: number; total: number; mime: "image/jpeg"; data: string };
 
 export function sendControl(channel: RTCDataChannel, message: TransferControl) {
   if (channel.readyState !== "open") throw new Error("Peer connection is closed.");
@@ -35,8 +36,15 @@ export function parseControl(value: string): TransferControl {
     throw new Error("Invalid transfer control message.");
   }
   const control = item as TransferControl;
-  if (!["header", "ready", "ack", "pause", "resume", "end", "cancel", "finished", "error"].includes(control.type)) {
+  if (!["header", "ready", "ack", "pause", "resume", "end", "cancel", "finished", "error", "preview"].includes(control.type)) {
     throw new Error("Unsupported transfer control message.");
+  }
+  if(control.type === "preview") {
+    if(!Number.isSafeInteger(control.index)||!Number.isSafeInteger(control.total) ||
+       control.index<0||control.total<1||control.total>5||control.index>=control.total||
+       typeof control.data!=="string"||control.data.length>65536||
+       typeof control.transfer_id!=="string"||!/^[0-9a-f-]{36}$/i.test(control.transfer_id)||
+       control.mime!=="image/jpeg") throw new Error("Malformed image preview.");
   }
   return control;
 }

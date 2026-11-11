@@ -2,6 +2,7 @@ import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 
 export type Role = "sender" | "receiver";
 export type PeerState = "waiting" | "connecting" | "connected" | "disconnected";
+export type RouteHint = "direct-host" | "direct-other" | "turn-relay" | "unknown";
 type Message = { type: "hello" | "offer" | "answer" | "ice"; device: string; sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
 
 export interface PeerOptions {
@@ -114,6 +115,33 @@ export class SupabaseRtcPeer {
     const pending = this.candidates.splice(0);
     for (const candidate of pending) if (this.pc) await this.pc.addIceCandidate(candidate);
   }
+  /** Derived from selected ICE candidate types; no IP addresses are exposed.
+   * Host-host suggests a direct route, not proof of same LAN or zero mobile usage.
+   * Browsers cannot enumerate mDNS devices/local IP addresses without native APIs.
+   */
+  async getConnectionRoute(): Promise<RouteHint> {
+    if(!this.pc || this.pc.connectionState!=="connected")return "unknown";
+    const stats=await this.pc.getStats();
+    type Entry=RTCStats & {selectedCandidatePairId?:string; localCandidateId?:string;
+      remoteCandidateId?:string;selected?:boolean;nominated?:boolean;state?:string;candidateType?:string};
+    let pair:Entry|undefined;
+    stats.forEach(raw=>{
+      const record=raw as Entry;
+      if(record.type==="transport"&&record.selectedCandidatePairId){pair=stats.get(record.selectedCandidatePairId) as Entry;}
+    });
+    if(!pair) stats.forEach(raw=>{
+      const record=raw as Entry;
+      if(record.type==="candidate-pair"&&record.nominated&&record.state==="succeeded")pair=record;
+    });
+    if(!pair?.localCandidateId||!pair?.remoteCandidateId)return "unknown";
+    const local=stats.get(pair.localCandidateId) as Entry|undefined;
+    const remote=stats.get(pair.remoteCandidateId) as Entry|undefined;
+    if(!local?.candidateType||!remote?.candidateType)return "unknown";
+    if(local.candidateType==="relay"||remote.candidateType==="relay")return "turn-relay";
+    if(local.candidateType==="host"&&remote.candidateType==="host")return "direct-host";
+    return "direct-other";
+  }
+
   close() {
     this.closed = true;
     this.stopHelloRetry();
