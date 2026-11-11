@@ -1,6 +1,6 @@
 /** Conservative, testable auto-receive rules. Never auto-open received files. */
 export const AUTO_ACCEPT_LIMIT_BYTES = 5 * 1024 ** 3;
-export const BLOCKED_EXTENSIONS = Object.freeze(["exe", "apk", "bat", "msi", "sh", "scr"]);
+export const BLOCKED_EXTENSIONS = Object.freeze(["exe", "apk", "bat", "msi", "sh", "scr", "pendpack"]);
 
 export function assessAutoReceive({
   paired, revoked = false, pinned = false, available = true,

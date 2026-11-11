@@ -11,6 +11,7 @@ import { createTransferRoom, randomTransferCode } from "@/lib/transfer/rooms";
 import { SupabaseRtcPeer, type PeerState } from "@/lib/transfer/rtc";
 import { CHUNK_BYTES, TransferSender, parseControl, sendControl, type TransferControl } from "@/lib/transfer/stream";
 import { db } from "@/lib/db";
+import { createFolderPackage } from "@/lib/folder-package.mjs";
 import { queueTrustedFile } from "@/lib/queue";
 import { getPairingContacts, isTrustedLocally, type PairingContact } from "@/lib/pairing";
 
@@ -19,6 +20,8 @@ const fmt = (n: number) => n < 1024 ? `${n} B` : `${(n / (1024 ** Math.floor(Mat
 export default function SendPage() {
   const { device } = useDevice();
   const input = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const [folderCount,setFolderCount] = useState(0);
   const peer = useRef<SupabaseRtcPeer | null>(null);
   const channel = useRef<RTCDataChannel | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -186,7 +189,7 @@ export default function SendPage() {
   };
 
   return <div className="space-y-7">
-    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 3 · PENDING FIRST</p>
+    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 4 · SEND FILES AND FOLDERS</p>
       <h1 className="mt-2 text-3xl font-bold">Send a file</h1><p className="mt-2 text-white/55">Queue files for paired devices even while they are offline, or share a one-time code. No file bytes pass through Supabase.</p></div>
     <Card className="space-y-5 p-6 sm:p-8">
       <label className="block text-sm font-medium" htmlFor="send-target">Recipient</label>
@@ -195,13 +198,34 @@ export default function SendPage() {
         <option value="">Use one-time code (unpaired devices)</option>
         {contacts.map(c => <option key={c.peer.id} value={c.peer.id}>{c.peer.device_name} — trusted contact</option>)}
       </select>
-      <input ref={input} type="file" className="sr-only" aria-label="Select file to send" onChange={e => setFile(e.target.files?.[0] ?? null)} />
-      <button type="button" disabled={busy} onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) setFile(e.dataTransfer.files[0] ?? null); }}
+      <input ref={input} type="file" className="sr-only" aria-label="Select file to send" onChange={e => {setFile(e.target.files?.[0] ?? null);setFolderCount(0);}} />
+      <input ref={folderInput} type="file" multiple className="sr-only" aria-label="Choose folder to send"
+        onChange={e=>{
+          try {
+            const items=Array.from(e.target.files??[]);
+            if(!items.length) return;
+            if(items.some(f=>!f.webkitRelativePath)) throw new Error("Your browser does not support folder selection. Try Chrome desktop or choose files individually.");
+            const root=items[0].webkitRelativePath.split('/')[0];
+            const packed=createFolderPackage(items.map(f=>({file:f,relativePath:f.webkitRelativePath})),root);
+            setFile(packed);setFolderCount(items.length);setError("");
+          }catch(cause){setError(cause instanceof Error?cause.message:"Could not package folder.");}
+          e.target.value="";
+        }}/>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" disabled={busy} onClick={()=>input.current?.click()}>Choose file</Button>
+        <Button variant="secondary" disabled={busy} onClick={()=>{
+          folderInput.current?.setAttribute('webkitdirectory','');
+          folderInput.current?.setAttribute('directory','');
+          folderInput.current?.click();
+        }}>Choose folder</Button>
+        <Link href="/groups" className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold">Send to group</Link>
+      </div>
+      <button type="button" disabled={busy} onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) {setFile(e.dataTransfer.files[0] ?? null);setFolderCount(0);} }}
         className="flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-violet-300/25 bg-violet-400/5 px-4 text-center hover:border-violet-300/70 disabled:opacity-60">
         <ArrowUpFromLine className="mb-3 text-violet-300" size={34}/><span className="font-semibold">Drop or select a file</span>
         <span className="mt-2 text-xs text-white/45">Streams in 64 KiB chunks. Disk-write acknowledgements cap buffering.</span>
       </button>
-      {file && <div className="flex items-center gap-3 rounded-xl bg-white/5 p-4"><FileUp size={20} className="text-violet-300"/><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-white/45">{fmt(file.size)}</p></div></div>}
+      {file && <div className="flex items-center gap-3 rounded-xl bg-white/5 p-4"><FileUp size={20} className="text-violet-300"/><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-white/45">{fmt(file.size)} {folderCount ? `· ${folderCount} files in one folder package (manual approval required)` : ""}</p></div></div>}
       {!code && !busy && !complete ? <Button onClick={() => void send()} disabled={!file || busy} className="w-full"><Wifi size={17}/> {target ? "Queue for trusted contact" : "Start secure transfer"}</Button> : code ? <div className="space-y-3 rounded-2xl border border-violet-300/20 bg-violet-500/10 p-5 text-center">
         <p className="text-xs uppercase tracking-widest text-violet-200">One-time code · valid 10 minutes</p>
         <p className="font-mono text-5xl font-black tracking-[0.13em] text-white">{code}</p>
@@ -217,6 +241,7 @@ export default function SendPage() {
       {(code || busy) && <div className="flex flex-wrap gap-2">{busy && session.current && <Button variant="secondary" onClick={togglePause}>{paused ? <Play size={16}/> : <Pause size={16}/>} {paused ? "Resume" : "Pause"}</Button>}<Button variant="outline" onClick={cancel}>{busy ? "Cancel transfer" : "Clear transfer"}</Button></div>}
       <p className="flex items-center gap-2 text-xs text-white/45"><ShieldCheck size={15}/> WebRTC encrypts file content. Trusted recipients may auto-save to private Inbox if safety rules permit.</p>
     </Card>
+    <p className="text-sm text-white/55">Need a file from someone? <Link className="font-semibold text-violet-300 underline" href="/requests">Request a file</Link>.</p>
     <p className="text-sm text-white/55">Receiving? <Link className="font-semibold text-violet-300 underline" href="/receive">Enter a transfer code</Link>.</p>
     <p className="text-xs text-amber-200/80">Pause/resume works only while the existing connection remains active. Paired-contact transfers are now queued locally for foreground retry and reconnect-resume; browser background delivery remains unavailable. Without TURN, some networks cannot connect.</p>
   </div>;

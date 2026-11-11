@@ -98,8 +98,9 @@ export default function ContactsPage() {
   };
 
   return <div className="space-y-7">
-    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 3 · TRUSTED CONTACTS</p>
+    <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-violet-300">PHASE 4 · TRUSTED CONTACTS</p>
       <h1 className="mt-2 text-3xl font-bold">Contacts</h1>
+      <div className="mt-4 flex flex-wrap gap-2"><Link href="/groups" className="rounded-lg border border-violet-300/25 px-4 py-2 text-xs font-semibold text-violet-200">Create a group</Link><Link href="/requests" className="rounded-lg border border-violet-300/25 px-4 py-2 text-xs font-semibold text-violet-200">Request a file</Link></div>
       <p className="mt-2 max-w-2xl text-sm text-white/60">Pair anywhere with a six-digit code. Both devices review fingerprints and approve. A code expires after ten minutes and can be used once.</p>
     </div>
 

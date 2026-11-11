@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, CircleHelp, ContactRound, Home, Inbox, LoaderCircle, Send, Settings2, Wifi } from "lucide-react";
+import { ArrowUpRight, CircleHelp, ContactRound, Home, Inbox, LoaderCircle, Send, Settings2, Wifi, UsersRound, FileQuestion } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ const nav = [
   { href: "/send", label: "Send", icon: Send },
   { href: "/settings", label: "Settings", icon: Settings2 },
 ];
+const desktopNav = [...nav,
+  { href: "/groups", label: "Groups", icon: UsersRound },
+  { href: "/requests", label: "Requests", icon: FileQuestion },
+];
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { device, phase, error, retry } = useDevice();
@@ -29,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/10 bg-[#101523] p-5 md:flex">
       <Link href="/" className="mb-12 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-violet-500 text-xl font-extrabold">P.</span><span className="text-2xl font-bold tracking-tight">PEND<span className="text-violet-400">.</span></span></Link>
       <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-widest text-white/35">Workspace</p>
-      <nav aria-label="Primary" className="space-y-1">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} className={cn("flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white/60 transition hover:bg-white/5 hover:text-white", pathname === href && "bg-violet-500/15 text-violet-200")}><Icon size={19}/>{label}</Link>)}</nav>
+      <nav aria-label="Primary" className="space-y-1">{desktopNav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} className={cn("flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white/60 transition hover:bg-white/5 hover:text-white", pathname === href && "bg-violet-500/15 text-violet-200")}><Icon size={19}/>{label}</Link>)}</nav>
       <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-xs uppercase tracking-wider text-white/40">This device</p><p className="mt-2 truncate text-sm font-semibold">{device.device_name}</p><div className="mt-2 flex items-center gap-2 text-xs text-white/50"><span className="size-2 rounded-full bg-amber-400"/>Presence checked every 20 seconds</div></div>
     </aside>
     <div className="mx-auto max-w-6xl pb-24 md:ml-64 md:pb-0">
@@ -39,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-2"><span className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70"><Wifi className="mr-2 inline" size={14}/>{device.wifi_only ? "Wi-Fi preferred" : "Data allowed"}</span><span className="hidden text-xs text-white/45 sm:inline">{device.device_name}</span></div>
       </header>
       <main className="px-5 py-8 sm:px-8 md:py-10">{children}</main>
-      <PresenceHeartbeat/><TrustedReceiver/><PendingEngine/><footer className="mx-5 mt-10 flex items-center justify-between border-t border-white/10 py-6 text-xs text-white/30 sm:mx-8"><span>© 2026 PEND · Phase 3 development</span><a href="https://github.com" target="_blank" rel="noopener noreferrer">Source setup <ArrowUpRight size={11} className="inline"/></a></footer>
+      <PresenceHeartbeat/><TrustedReceiver/><PendingEngine/><footer className="mx-5 mt-10 flex items-center justify-between border-t border-white/10 py-6 text-xs text-white/30 sm:mx-8"><span>© 2026 PEND · Phase 4 Sprint 7 development</span><a href="https://github.com" target="_blank" rel="noopener noreferrer">Source setup <ArrowUpRight size={11} className="inline"/></a></footer>
     </div>
     <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-white/10 bg-[#101523]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} className={cn("flex min-h-17 flex-col items-center justify-center gap-1 text-[10px] text-white/45", pathname === href && "text-violet-300")}><Icon size={21}/>{label}</Link>)}</nav>
   </div>;

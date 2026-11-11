@@ -49,3 +49,31 @@ export async function getOutgoingQueue(client:SupabaseClient,senderId:string):Pr
   if(error) throw error;
   return (data ?? []) as QueueRow[];
 }
+
+/** Reply to a trusted device's file request, keeping ALL file bytes locally. */
+export async function queueFileResponse(client: SupabaseClient, senderDeviceId: string, requestId: string,
+  receiverDeviceId: string, file: File): Promise<string> {
+  const estimate = await navigator.storage?.estimate?.();
+  if (estimate?.quota && estimate.usage != null && file.size > estimate.quota - estimate.usage) {
+    throw new Error("Not enough local storage to queue the reply.");
+  }
+  const { data, error } = await client.rpc("fulfill_file_request", {
+    p_target_device_id: senderDeviceId, p_request_id: requestId,
+    p_file_name: file.name, p_file_size: file.size,
+    p_file_type: file.type || "application/octet-stream",
+  });
+  if (error) throw error;
+  if (typeof data !== "string") throw new Error("Request could not be fulfilled.");
+  try {
+    await db.pending.put({ transferId: data, receiverId: receiverDeviceId,
+      fileName: file.name, fileSize: file.size, status: "pending", source: file, updatedAt: Date.now() });
+  } catch (cause) {
+    await client.rpc("rollback_file_response", {
+      p_target_device_id: senderDeviceId, p_request_id: requestId, p_transfer_id: data,
+    });
+    throw cause;
+  }
+  try { await navigator.storage?.persist?.(); } catch { /* optional */ }
+  window.dispatchEvent(new Event("pend:queue-changed"));
+  return data;
+}

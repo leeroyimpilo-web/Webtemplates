@@ -26,6 +26,7 @@ export interface InboxItem {
 }
 export interface ResumeOffset { transferId: string; bytesTransferred: number; updatedAt: number }
 export interface TrustedDevice { deviceId: string; publicKey: string; pairedAt: number }
+export interface LocalGroup { id: string; name: string; memberDeviceIds: string[]; createdAt: number; updatedAt: number }
 
 class PendDatabase extends Dexie {
   identity!: Table<LocalIdentity, string>;
@@ -33,6 +34,7 @@ class PendDatabase extends Dexie {
   inbox!: Table<InboxItem, string>;
   offsets!: Table<ResumeOffset, string>;
   trustedDevices!: Table<TrustedDevice, string>;
+  groups!: Table<LocalGroup, string>;
 
   constructor() {
     super("pend-local-v1");
@@ -42,6 +44,15 @@ class PendDatabase extends Dexie {
       inbox: "transferId,senderId,receivedAt",
       offsets: "transferId,updatedAt",
       trustedDevices: "deviceId,pairedAt",
+    });
+    // V2 adds groups without resetting any device keys, queued source files or Inbox entries.
+    this.version(2).stores({
+      identity: "key",
+      pending: "transferId,receiverId,status,updatedAt",
+      inbox: "transferId,senderId,receivedAt",
+      offsets: "transferId,updatedAt",
+      trustedDevices: "deviceId,pairedAt",
+      groups: "id,name,updatedAt",
     });
   }
 }

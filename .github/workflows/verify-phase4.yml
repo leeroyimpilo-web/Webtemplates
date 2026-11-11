@@ -1,0 +1,25 @@
+name: Verify PEND Phase 4 Sprint 7
+on:
+  push:
+    branches: [pend-phase4]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile check
+        run: npm run typecheck
+      - name: All transfer, pairing, presence and folder tests
+        run: npm run test:all
+      - name: Next.js production build
+        run: npm run build
