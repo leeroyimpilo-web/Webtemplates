@@ -21,10 +21,10 @@ No file bytes are uploaded to Supabase Storage or the application server. WebRTC
 | 1 | WebRTC signaling and streamed file transfer, progress, pause/cancel | Implemented; real 10 MB / 1 GB / 5 GB device tests outstanding |
 | 2 | Six-digit remote pairing, dual approval, trusted contacts, guarded auto-receive | Implemented; end-to-end security and physical-device tests outstanding |
 | 3 | Presence, pending metadata queue, Wi-Fi-only controls, reconnect-resume | Implemented; end-to-end offline/resume tests outstanding |
-| 4 | Group send, folders, file requests, clipboard | Not implemented |
+| 4 | Group send, folders, file requests, clipboard, thumbnails, nearby route hints | Development implementation; live acceptance tests pending |
 | 5 | Capacitor Android background service, push and production hardening | Not implemented |
 
-**Current development branch:** `pend-phase3`. Earlier work is preserved on `pend-phase0`, `pend-phase1` and `pend-phase2`. The repository's `main` branch is a separate placeholder and does not contain the PEND application.
+**Current development branch:** `pend-phase4`. Earlier work is preserved on `pend-phase0`, `pend-phase1` and `pend-phase2`. The repository's `main` branch is a separate placeholder and does not contain the PEND application.
 
 ## Technology
 
@@ -127,8 +127,24 @@ Read the implementation notes:
 
 ## Roadmap
 
-**Next:** finish real-device Phase 1–3 verification and document defects, then build Phase 4 (groups, folders and file requests) and Phase 5 (Android background handling). Do not describe unverified features as production-ready.
+**Next:** complete Phase 4 physical-device integration testing and document repairs. Phase 5 Android background handling is next **only after Phase 4**, per the original build order. Do not describe unverified features as production-ready.
 
 ---
 
 **PEND is under active development.** The tagline describes the intended end product, not a completed service.
+
+## Phase 4 — Group, folder, request, thumbnail and clipboard development
+
+The `pend-phase4` branch includes the Sprint 7 and Sprint 8 code:
+
+- Groups in local Dexie and separate authenticated queued transfers for each recipient.
+- Single-stream PEND folder packages that retain relative paths; `.pendpack` always needs manual approval and extraction to a selected directory currently requires compatible Chromium browsers.
+- Authenticated and pairing-checked Request-a-File workflows (create, decline, fulfil) with the migration `supabase/phase4_requests.sql` already installed on the PEND project.
+- Search and filters for Inbox; explicit download, delete, media preview, share and folder inspection.
+- Up to 200 KiB optional JPEG thumbnails carried through the peer DataChannel before file transfer.
+- 10 KiB ECDH/AES-GCM encrypted text clipboard delivered ephemerally over Supabase Realtime when both PEND pages are open.
+- Host/direct/relay ICE route hints. **This is not genuine mDNS discovery or proof of zero mobile-data usage.** Native discovery is a future Android requirement, not a completed web feature.
+
+These are **development implementations**, not verified real-device outcomes. Important unresolved items are end-to-end transfers on two networks, 3-device group send, folder hash comparison, file request integration, clipboard revocation behavior, cross-browser support and a production security audit. The planned PeerJS integration also still requires reconciliation with the Supabase Realtime signaling design. Never label PEND production-ready or claim closed-browser background receiving.
+
+Details: [Phase 4 Sprint 7](docs/PHASE4_SPRINT7.md) and [Phase 4 Sprint 8](docs/PHASE4_SPRINT8.md).
