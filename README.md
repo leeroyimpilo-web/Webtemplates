@@ -1,33 +1,134 @@
-# PEND — peer-to-peer transfer (Phase 2 development)
+# PEND — Peer-to-Peer File Transfer
 
-**Prototype status: Phase 2 remote pairing and trusted in-app receipt implemented, unverified on real devices.** The user explicitly approved continuing beyond the Phase 1 acceptance tests; those issues remain logged for repair later. Do not label this app production ready.
+**Send any file, any size, to anyone. Pending until they're online. Paired once, auto-receive forever.**
 
-**Product vision:** Send any file, any size, to anyone. Pending until they are online. Paired once, auto-receive forever. Those claims describe the long-term product, not today's browser prototype.
+> **Product vision — not a production guarantee.** PEND is an experimental, offline-aware peer-to-peer file transfer web app. Phase 0–3 development code exists; automated builds and protocol tests have passed, but **end-to-end real-device and cross-network transfers have not yet been validated**. Browser limitations mean transfers cannot start automatically with both apps closed.
 
-## Quick start
+## What is PEND?
+
+PEND aims to solve two file-sharing problems:
+
+1. **Pending delivery:** A sender can queue a file when a trusted receiver is offline. The server stores **metadata only**, while the sender's browser holds the file until both browsers are open and a direct connection is possible.
+2. **Pair once:** Two users connect with a six-digit code or QR link, **both explicitly confirm** each other's devices, and can then share approved files without repeating the acceptance prompt, subject to safety rules.
+
+No file bytes are uploaded to Supabase Storage or the application server. WebRTC carries the file data between peers.
+
+## Current development status
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 0 | Next.js PWA, anonymous identity, device registration, database RLS | Implemented; complete browser onboarding and installation tests outstanding |
+| 1 | WebRTC signaling and streamed file transfer, progress, pause/cancel | Implemented; real 10 MB / 1 GB / 5 GB device tests outstanding |
+| 2 | Six-digit remote pairing, dual approval, trusted contacts, guarded auto-receive | Implemented; end-to-end security and physical-device tests outstanding |
+| 3 | Presence, pending metadata queue, Wi-Fi-only controls, reconnect-resume | Implemented; end-to-end offline/resume tests outstanding |
+| 4 | Group send, folders, file requests, clipboard | Not implemented |
+| 5 | Capacitor Android background service, push and production hardening | Not implemented |
+
+**Current development branch:** `pend-phase3`. Earlier work is preserved on `pend-phase0`, `pend-phase1` and `pend-phase2`. The repository's `main` branch is a separate placeholder and does not contain the PEND application.
+
+## Technology
+
+- **Web:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS, shadcn-style components, installable PWA
+- **Peer-to-peer:** WebRTC data channels, 64 KiB chunk protocol and receiver-confirmed progress; private signaling via Supabase
+- **Backend:** Supabase Auth (anonymous sign-ins), Postgres with RLS, Realtime and guarded RPCs
+- **Local file state:** Dexie/IndexedDB for queued source files and metadata, Origin Private File System (OPFS) for incoming files and resume checkpoints
+- **Security:** WebRTC transport encryption, non-extractable browser ECDH identity, displayed device fingerprints and two-sided pairing confirmation
+
+**Note:** The current implementation uses the WebRTC APIs directly; adopting PeerJS as specified in the original product brief remains to be verified. Cross-network connections may require a TURN server.
+
+## Development setup
+
+Prerequisites: Node.js compatible with Next.js 16, npm, a dedicated Supabase project and two modern browsers for testing.
 
 ```bash
+git clone --branch pend-phase3 https://github.com/leeroyimpilo-web/Webtemplates.git pend
+cd pend
 npm ci
 cp .env.example .env.local
-# Configure PEND Supabase URL and publishable key (never use a service-role key in NEXT_PUBLIC envs)
+# Fill in your PEND Supabase project URL and publishable key
 npm run typecheck
 npm run test:all
 npm run build
 npm run dev
 ```
 
-Apply database migration `supabase/phase2_pairing_and_trust.sql` after Phase 0 and Phase 1 migrations. Do not reapply previously run migrations to a new database without reviewing schema differences. Enable anonymous sign-ins in Supabase Auth.
+Open `http://localhost:3000` to begin onboarding. Browser API features require HTTPS in deployment; localhost is a permitted development exception.
 
-**Phase 2:** Contacts page produces 10-minute, one-use six-digit codes and QR codes; both device owners must confirm fingerprints. Paired contacts can be selected in Send, and active browsers receive P2P chunks into PEND's private Inbox if safety and network rules allow it. Revoking a pairing revokes future trusted transfer invitations.
+In `.env.local` set:
 
-**Hard limits:** browser must be open to auto-receive; default WiFi-only blocks unknown network type from auto-save; auto files >= 5 GiB require confirmation; executables are not auto-accepted. Storage is private OPFS, not Downloads. No files stored on Supabase. Peer connection without TURN is not reliable on all networks. Offline queue, background service, and reconnection resume are future phases.
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 
-Details: [Phase 2 testing and security notes](docs/PHASE2_REMOTE_PAIRING.md); Phase 1 outstanding tests in docs/PHASE1_SPRINT2.md.
+# Optional infrastructure for later verified cross-network service:
+TURN_URL=
+TURN_USER=
+TURN_PASS=
+```
 
-## Phase 3 development branch
+Use a **publishable** key in `NEXT_PUBLIC_SUPABASE_ANON_KEY`; never put a service-role key or TURN credentials in a `NEXT_PUBLIC_` variable. Do not commit `.env.local`.
 
-See [Phase 3 implementation and limitations](docs/PHASE3.md). Apply
-`supabase/phase3_presence_and_pending.sql` to the dedicated PEND project before
-running this branch. There is no automatic background transfer when the PWA is
-closed; the browser worker retries **only while PEND is open**. The source file
-must remain in the sender's IndexedDB (it is not uploaded to the server).
+### Database
+
+The PEND Supabase project is separate from TenderBase. For a new database, review and apply the versioned migrations **in order**:
+
+1. `supabase/schema.phase0.sql`
+2. `supabase/phase1_rooms.sql`
+3. `supabase/phase1_sprint2_rate_limit.sql`
+4. `supabase/phase2_pairing_and_trust.sql`
+5. `supabase/phase3_presence_and_pending.sql`
+
+These migrations are **already installed** on the connected PEND project (Sharedit organization). Do not reapply them unnecessarily. Enable **Anonymous Sign-Ins** in Supabase Authentication settings before testing onboarding. The application has not been publicly deployed to Vercel.
+
+## How the prototype works
+
+1. **Register** a browser device and generate its ECDH identity.
+2. **Pair** through a six-digit, one-time, ten-minute code or a QR link. Both people inspect the device fingerprint and choose to confirm.
+3. **Send** a file to a paired contact. Its bytes remain in the sender's IndexedDB if delivery is pending.
+4. **Receive** only while the receiving PWA is open. Trusted incoming files are saved to a private Inbox; the user explicitly chooses to download/open them.
+5. **Resume** a disconnected transfer from a durable receiver-side OPFS checkpoint when both apps reconnect and the sender still holds the source file.
+
+**Availability:** A 20-second heartbeat is evaluated for recency. Available, Busy, Invisible and Wi-Fi-only preferences control whether a pending transfer may activate. An unknown network type is treated cautiously.
+
+## Safety boundaries
+
+- **Never store file contents in Supabase**, including Storage, Postgres, Realtime messages or logs.
+- **Never auto-open** received files.
+- Automatic receiving requires an active, mutually approved, unrevoked pairing, verified local identity and permitted receiver settings.
+- File extensions `.exe`, `.apk`, `.bat`, `.msi`, `.sh` and `.scr` require manual approval. Files **over 5 GiB** also require manual approval.
+- Supabase RLS restricts records; pairing and transfer operations use owner-checking database RPCs.
+- Six-digit pairing codes are hashed in the database and time-limited. Internet-scale abuse prevention needs further IP/device-based rate limiting and security testing.
+- Supabase Storage is **not** used for files.
+
+## Known limitations
+
+- **No guaranteed background transfer** in the PWA. The sender and receiver must have PEND open for WebRTC transfer to start. A future Capacitor/native Android service is required for the full always-on product vision.
+- Files queued in IndexedDB can be lost through browser eviction, insufficient storage or cleared browser data. Pending database metadata does not replace the source file.
+- Network Information API support varies across browsers; Wi-Fi-only can prevent transfers until a reliable connection is detected or the user explicitly overrides it.
+- Private Inbox storage is subject to browser quotas. It is not the system Downloads folder.
+- Some networks require TURN; `TURN_URL`, `TURN_USER` and `TURN_PASS` alone do not mean TURN is deployed or ready.
+- The current version still needs **two-device and cross-network testing**, large-file integrity checks, resume-after-disconnection verification, a production security review and Android/iOS compatibility testing.
+
+## Development and verification
+
+```bash
+npm run typecheck
+npm run test:all
+npm run build
+```
+
+GitHub Actions runs dependency installation, automated tests, type checking and Next.js production builds. A passing CI build does **not** prove successful peer transfers on physical devices.
+
+Read the implementation notes:
+
+- [Phase 1 transfer work](docs/PHASE1_SPRINT2.md)
+- [Phase 2 mutual pairing and security](docs/PHASE2_REMOTE_PAIRING.md)
+- [Phase 3 pending, presence and resume](docs/PHASE3.md)
+
+## Roadmap
+
+**Next:** finish real-device Phase 1–3 verification and document defects, then build Phase 4 (groups, folders and file requests) and Phase 5 (Android background handling). Do not describe unverified features as production-ready.
+
+---
+
+**PEND is under active development.** The tagline describes the intended end product, not a completed service.
